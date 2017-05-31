@@ -1,0 +1,16 @@
+version: '3'
+services:
+    web:
+        build: web
+        image: chgivan/estore/web
+        networks:
+            - "my-net"
+    proxy:
+        build: proxy
+        image: chgivan/estore/proxy
+        ports:
+            - "80:80"
+        networks:
+            - "my-net"
+networks:
+    my-net:
