@@ -1,4 +1,5 @@
 import os, sys, psycopg2
+import sqlTemplates as sql
 
 def _getEnvVariable(name):
     variable = os.environ.get(name)
@@ -15,50 +16,77 @@ dbHost = _getEnvVariable('POSTGRES_HOST')
 try:
     conn = psycopg2.connect(dbname=dbName, user=dbUser, host=dbHost, password=dbPass)
     cur = conn.cursor()
+    cur.execute(sql.createPersonTableSQL)
+    conn.commit()
 except:
     print("[ERROR] Unable to connect to the database" + dbname + "@" + dbHost)
     sys.exit(-1)
 
-createPersonTableSQL = """
-    CREATE TABLE IF NOT EXISTS persons (
-        id serial PRIMARY KEY,
-        firstName varchar(50) NOT NULL,
-        lastName varchar(50) NOT NULL,
-        email varchar(50) UNIQUE NOT NULL,
-        role varchar(5) NOT NULL CHECK (role IN ('admin','user'))
-    );
-"""
-
-insertPersonSQL = """
-    INSERT INTO persons (firstName, lastName, email, role)
-    VALUES (%(firstName)s, %(lastName)s, %(email)s, %(role)s );
-"""
-
-cur.execute(createPersonTableSQL)
-conn.commit()
-
-class person:
-    id = None
-    firstName = None
-    lastName = None
-    email = None
-    role = None
-
-loadLite(id):
-
-loadPerson(id):
-    >>> cur.execute("SELECT id, firstName, lastName, email, role FROM test;")
->>> cur.fetchone()
-(1, 100, "abc'def")
 
 
-cur.execute(insertPersonSQL, {
-    'firstName': "Test 3",
-    'lastName': "Testopoulos 3",
-    'email': "Testopoulos 3@test.test",
-    'role': "asa"
+def createPerson(body):
+    try:
+        cur.execute(sql.insertPersonSQL, body)
+        id = cur.fetchone()[0]
+        conn.commit()
+        return id
+    except psycopg2.IntegrityError as err:
+        conn.rollback()
+        if err.pgcode == '23505': #unique_violation
+            pass
+        elif err.pgcode == '23514': #check_violation
+            pass
+        else:
+            pass
+        print("[DBError](person.create) Code:" + err.pgcode , str(err))
+        return None;
+    except Exception as err:
+        print("[Error](person.create) " + str(err))
+        return None;
+
+def getPerson(id):
+    try:
+        cur.execute(sql.selectFullPersonSQL, {'id':id})
+        row = cur.fetchone()
+        if row is None:
+            print("[ArgsError](person.get) Unknown id " + id)
+            return None
+        print(row)
+        return sql.convertRow2Person(row)
+    except psycopg2.IntegrityError as err:
+        print("[DBError](person.get) Code:" + err.pgcode , str(err))
+        return None;
+    except Exception as err:
+        print("[Error](person.get) " + str(err))
+        return None;
+
+def getAllPersonIDs():
+    try:
+        cur.execute(sql.selectAllIdsSQL)
+        rows = cur.fetchall()
+        body = []
+        for row in rows:
+            body.append(row[0])
+        return body
+    except psycopg2.IntegrityError as err:
+        print("[DBError](person.getAll) Code:" + err.pgcode , str(err))
+        return None;
+    except Exception as err:
+        print("[Error](person.getAll)" + str(err))
+        return None;
+'''
+id = createPerson({
+    'firstName': "saffas",
+    'lastName': "Testopoulos 4",
+    'email': "Testopoulos 1@test.test",
+    'role': "admin"
 })
-conn.commit()
+print(id)
+'''
+
+print(getPerson("4"))
+print(str(getAllPersonIDs()))
+
 
 cur.close()
 conn.close()
