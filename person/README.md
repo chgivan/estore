@@ -19,9 +19,14 @@ docker exec -it db psql -U person
 pip install -r requirements.txt
 python service.py
 
-Person
+Person Lite:
+    - userName: String (firstName + " " + lastName)
+    - id:
+
+Person:
+    - id: Int
     - firstName: String
     - lastName: String
     - email: String
     - role: String
-    - name: String
+    - userName: String
