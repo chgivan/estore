@@ -16,7 +16,7 @@ set POSTGRES_HOST=192.168.99.100
 docker exec -it db psql -U person
 
 #Run Test service
-pip install -r requirements.txt
+pip install -r req.txt
 python service.py
 
 Person Lite:

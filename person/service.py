@@ -74,7 +74,7 @@ def getAllPersonIDs():
     except Exception as err:
         print("[Error](person.getAll)" + str(err))
         return None;
-'''
+
 id = createPerson({
     'firstName': "saffas",
     'lastName': "Testopoulos 4",
@@ -82,7 +82,7 @@ id = createPerson({
     'role': "admin"
 })
 print(id)
-'''
+
 
 print(getPerson("4"))
 print(str(getAllPersonIDs()))
