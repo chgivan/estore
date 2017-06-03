@@ -11,7 +11,7 @@ docker run \
 set POSTGRES_USER=person
 set POSTGRES_PASSWORD=mysercetpassword
 set POSTGRES_DB=person
-set POSTGRES_HOST=192.168.99.100
+set POSTGRES_HOST=192.168.99.100"
 
 docker exec -it db psql -U person
 

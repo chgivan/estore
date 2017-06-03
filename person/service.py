@@ -1,5 +1,6 @@
-import os, sys, psycopg2
-import sqlTemplates as sql
+from pony.orm import *
+from flask import Flask, request, jsonify
+import os, sys, json
 
 def _getEnvVariable(name):
     variable = os.environ.get(name)
@@ -12,81 +13,87 @@ dbUser = _getEnvVariable("POSTGRES_USER")
 dbPass = _getEnvVariable('POSTGRES_PASSWORD')
 dbName = _getEnvVariable('POSTGRES_DB')
 dbHost = _getEnvVariable('POSTGRES_HOST')
+db = Database()
+app = Flask(__name__)
 
-try:
-    conn = psycopg2.connect(dbname=dbName, user=dbUser, host=dbHost, password=dbPass)
-    cur = conn.cursor()
-    cur.execute(sql.createPersonTableSQL)
-    conn.commit()
-except:
-    print("[ERROR] Unable to connect to the database" + dbname + "@" + dbHost)
-    sys.exit(-1)
+class Person(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    email = Required(str, unique=True)
+    firstName = Required(str)
+    lastName = Required(str)
+    role = Required(str)
+
+db.bind('postgres', user=dbUser, password=dbPass, host=dbHost, database=dbName)
+db.generate_mapping(create_tables=True)
+sql_debug(True)
+
+'''
+with db_session:
+    p1 = Person(email="test1@test.ts", firstName="test1", lastName="testopoulos", role="admin")
+    p2 = Person(email="test2@test.ts", firstName="test2", lastName="testopoulos", role="user")
+    p3 = Person(email="test3@test.ts", firstName="test3", lastName="testopoulos", role="user")
+    p4 = Person(email="test4@test.ts", firstName="test4", lastName="testopoulos", role="user")
+    p5 = Person(email="test5@test.ts", firstName="test5", lastName="testopoulos", role="user")
+'''
+#BackEnd
 
 
+@db_session
+def updatePerson(id,**body):
+    Person[id].set(**body)
 
-def createPerson(body):
-    try:
-        cur.execute(sql.insertPersonSQL, body)
-        id = cur.fetchone()[0]
-        conn.commit()
-        return id
-    except psycopg2.IntegrityError as err:
-        conn.rollback()
-        if err.pgcode == '23505': #unique_violation
-            pass
-        elif err.pgcode == '23514': #check_violation
-            pass
-        else:
-            pass
-        print("[DBError](person.create) Code:" + err.pgcode , str(err))
-        return None;
-    except Exception as err:
-        print("[Error](person.create) " + str(err))
-        return None;
+@db_session
+def deletePerson(id):
+    Person[id].delete()
 
+def except_hook(type, value, tback):
+    if type is core.ObjectNotFound:
+        print("[Error] Person Not Found")
+    elif type is core.TransactionIntegrityError:
+        print("[Error] Person Duplicate Email")
+    elif type is ValueError:
+        print("[Error] " + str(value))
+    else:
+        sys.__excepthook__(type, value, tback)
+sys.excepthook = except_hook
+
+@app.route("/", methods=["GET"])
+@db_session
+def getPersons():
+    limit = request.args.get("limit", default=100, type=int)
+    persons = Person.select().order_by(lambda p: p.lastName)[:limit]
+    return jsonify([p.to_dict() for p in persons])
+
+@app.route("/<id>", methods=["GET"])
+@db_session
 def getPerson(id):
     try:
-        cur.execute(sql.selectFullPersonSQL, {'id':id})
-        row = cur.fetchone()
-        if row is None:
-            print("[ArgsError](person.get) Unknown id " + id)
-            return None
-        print(row)
-        return sql.convertRow2Person(row)
-    except psycopg2.IntegrityError as err:
-        print("[DBError](person.get) Code:" + err.pgcode , str(err))
-        return None;
-    except Exception as err:
-        print("[Error](person.get) " + str(err))
-        return None;
+        return jsonify(Person[id].to_dict())
+    except core.ObjectNotFound:
+        response = jsonify({"msg":"Person ID " + id + " does not exists!"})
+        response.status_code = 404
+        return response
+    except:
+        response = jsonify({"msg":"Internal Application Error"})
+        response.status_code = 500
+        return response
 
-def getAllPersonIDs():
-    try:
-        cur.execute(sql.selectAllIdsSQL)
-        rows = cur.fetchall()
-        body = []
-        for row in rows:
-            body.append(row[0])
-        return body
-    except psycopg2.IntegrityError as err:
-        print("[DBError](person.getAll) Code:" + err.pgcode , str(err))
-        return None;
-    except Exception as err:
-        print("[Error](person.getAll)" + str(err))
-        return None;
+@app.route("/", methods=["POST"])
+@db_session
+def createPerson():
+    if not validPersonArgs():
+        response = jsonify({"msg":"Bad Request Argument on create Person!"})
+        response.status_code = 400
+        return response
+    p = Person(request.args)
+    commit()
+    response = jsonify({"id":p.id})
+    response.status_code = 201
+    return response
 
-id = createPerson({
-    'firstName': "saffas",
-    'lastName': "Testopoulos 4",
-    'email': "Testopoulos 1@test.test",
-    'role': "admin"
-})
-print(id)
+def validPersonArgs():
+    if set('email','firstName','lastName','role') != request.args.keys():
+        return False
 
-
-print(getPerson("4"))
-print(str(getAllPersonIDs()))
-
-
-cur.close()
-conn.close()
+if __name__ == "__main__":
+    app.run(debug=True)
